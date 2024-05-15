@@ -10,6 +10,8 @@ This is a professional C++ application for managing bank accounts and transactio
 - **Loan Management**: Provides functionality for requesting, repaying, and applying interest to loans.
 - **Currency Support**: Supports multiple currencies for deposits, withdrawals, and transfers.
 
+<img width="1915" alt="Screenshot 2024-05-15 at 3 22 11 PM copy" src="https://github.com/shuddha2021/BankEase-Simplify-Your-Finances/assets/81951239/802428ac-6ec7-49ba-a609-3a56dd03b953">
+
 ## Technologies Used
 
 - **C++**: The application is written in C++.
