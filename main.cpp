@@ -1,4 +1,4 @@
-#include <iostream>
+#include <iostream >
 #include <string>
 #include <vector>
 #include <iomanip>
@@ -14,9 +14,11 @@ public:
     double amount;
     double balanceAfter;
     std::time_t timestamp;
+    std::string currency;
+    std::time_t scheduledTime;
 
-    Transaction(std::string t, double amt, double bal, std::string cat = "Uncategorized")
-            : type(t), amount(amt), balanceAfter(bal), category(cat) {
+    Transaction(std::string t, double amt, double bal, std::string cur = "USD", std::string cat = "Uncategorized", std::time_t schTime = 0)
+            : type(t), amount(amt), balanceAfter(bal), currency(cur), category(cat), scheduledTime(schTime) {
         timestamp = std::time(nullptr);
     }
 };
@@ -38,13 +40,15 @@ private:
     std::string secureProtocol;
     double loanAmount;
     double loanInterestRate;
+    std::string alias;
+    double withdrawalFee;
 
 public:
     BankAccount(const std::string &name, long number, double initialBalance, double interestRate = 0.0, double overdraftLimit = 0.0,
-                const std::string &username = "", const std::string &password = "", double dailyLimit = 1000.00)
+                const std::string &username = "", const std::string &password = "", double dailyLimit = 1000.00, double withdrawFee = 5.00)
             : accountHolder(name), accountNumber(number), balance(initialBalance), interestRate(interestRate), overdraftLimit(overdraftLimit),
               isFrozen(false), username(username), password(password), isLocked(false), dailyTransactionLimit(dailyLimit), secureProtocol("HTTPS"),
-              loanAmount(0.0), loanInterestRate(0.0) {
+              loanAmount(0.0), loanInterestRate(0.0), alias(name), withdrawalFee(withdrawFee) {
         currencies["USD"] = initialBalance;
     }
 
@@ -68,12 +72,13 @@ public:
 
     // Withdraw funds from the account
     void withdraw(double amount, std::string currency = "USD") {
-        if (amount > 0 && (balance + overdraftLimit) >= amount && currencies[currency] >= amount && !isLocked) {
-            balance -= amount;
-            currencies[currency] -= amount;
+        double totalAmount = amount + withdrawalFee;
+        if (amount > 0 && (balance + overdraftLimit) >= totalAmount && currencies[currency] >= totalAmount && !isLocked) {
+            balance -= totalAmount;
+            currencies[currency] -= totalAmount;
             transactionHistory.emplace_back("Withdrawal", amount, balance, currency);
             std::cout << "Withdrawal successful. Current balance: $" << std::fixed << std::setprecision(2) << balance << std::endl;
-            notifyTransaction("Withdrawal", amount);
+            notifyTransaction("Withdrawal", totalAmount);
         } else {
             std::cout << "Invalid amount, exceeding overdraft limit, insufficient funds in specified currency, or account locked." << std::endl;
         }
@@ -143,17 +148,24 @@ public:
     // Notify user about a transaction
     void notifyTransaction(const std::string &type, double amount) {
         std::cout << "Notification: Transaction of $" << std::fixed << std::setprecision(2) << amount << " " << type << " has been performed." << std::endl;
+        sendEmailNotification(type, amount);
+    }
+
+    // Send email notification
+    void sendEmailNotification(const std::string &type, double amount) {
+        std::cout << "Email: A transaction of $" << std::fixed << std::setprecision(2) << amount << " (" << type << ") has been processed." << std::endl;
     }
 
     // Generate a statement for the account
     void generateStatement() const {
         std::cout << "Statement for Account Number: " << accountNumber << std::endl;
-        std::cout << "Account Holder: " << accountHolder << std::endl;
+        std::cout << "Account Holder: " << accountHolder << " (Alias: " << alias << ")" << std::endl;
         std::cout << "Balance: $" << std::fixed << std::setprecision(2) << balance << std::endl;
         std::cout << "Transaction History:" << std::endl;
         for (const auto &transaction : transactionHistory) {
             std::cout << "Type: " << transaction.type << ", Amount: $" << transaction.amount
-                      << ", Balance: $" << transaction.balanceAfter << ", Category: " << transaction.category << std::endl;
+                      << ", Balance: $" << transaction.balanceAfter << ", Currency: " << transaction.currency
+                      << ", Category: " << transaction.category << std::endl;
         }
     }
 
@@ -220,6 +232,32 @@ public:
     void checkBalance() const {
         std::cout << "The current balance is: $" << std::fixed << std::setprecision(2) << balance << std::endl;
     }
+
+    // Set alias for the account holder
+    void setAlias(const std::string &newAlias) {
+        alias = newAlias;
+        std::cout << "Alias set to " << alias << std::endl;
+    }
+
+    // Provide a quick summary of the account
+    void accountSummary() const {
+        std::cout << "Account Summary for " << accountHolder << " (Alias: " << alias << ")" << std::endl;
+        std::cout << "Balance: $" << std::fixed << std::setprecision(2) << balance << std::endl;
+        std::cout << "Currencies: " << std::endl;
+        for (const auto &currency : currencies) {
+            std::cout << "  " << currency.first << ": $" << std::fixed << std::setprecision(2) << currency.second << std::endl;
+        }
+    }
+
+    // Schedule a transaction to be executed at a future date
+    void scheduleTransaction(const std::string &type, double amount, std::string currency, std::time_t scheduledTime) {
+        if (scheduledTime > std::time(nullptr)) {
+            transactionHistory.emplace_back(type, amount, balance, currency, "Scheduled", scheduledTime);
+            std::cout << "Transaction scheduled successfully." << std::endl;
+        } else {
+            std::cout << "Invalid scheduled time. Please enter a future date and time." << std::endl;
+        }
+    }
 };
 
 int main() {
@@ -229,8 +267,8 @@ int main() {
 
     // Simulate account operations.
     if (userAccount.authenticate("john_doe", "password123")) {
-        userAccount.deposit(500.00);
-        userAccount.withdraw(200.00);
+        userAccount.deposit(500.00, "USD");
+        userAccount.withdraw(200.00, "USD");
         userAccount.requestLoan(1000.00, 3.5); // Request loan with 3.5% interest rate
         userAccount.applyInterest();
         userAccount.checkBalance();
@@ -240,6 +278,10 @@ int main() {
         userAccount.setSecureProtocol("TLS");
         userAccount.transferTo(creditCardAccount, 300.00);
         userAccount.generateStatement();
+        userAccount.setAlias("JD");
+        userAccount.accountSummary();
+        std::time_t futureTime = std::time(nullptr) + 60 * 60 * 24; // Schedule for 1 day later
+        userAccount.scheduleTransaction("Withdrawal", 100.00, "USD", futureTime);
     } else {
         std::cout << "Invalid username or password. Transaction cancelled." << std::endl;
     }
