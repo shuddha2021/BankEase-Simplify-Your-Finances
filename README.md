@@ -1,8 +1,8 @@
 # 🏦 BankEase — Simplify Your Finances
 
-A full-featured, interactive C++ 17 banking application with account management, inter-account transfers, loan management, transaction history, multi-currency support, and account security — all in a single file that compiles with **zero warnings**.
+A full-featured, interactive C++23 banking application with account management, inter-account transfers, loan management, transaction history, multi-currency support, and account security — all in a single file that compiles with **zero warnings**.
 
-BankEase is a menu-driven console banking system that demonstrates real-world object-oriented design in modern C++17. Create accounts, authenticate with hashed passwords, deposit, withdraw, transfer between accounts, manage loans with compound interest, freeze or lock accounts, and generate formatted statements — all through a clean interactive CLI.
+BankEase is a menu-driven console banking system that demonstrates real-world object-oriented design in modern C++23. Create accounts, authenticate with hashed passwords, deposit, withdraw, transfer between accounts, manage loans with compound interest, freeze or lock accounts, and generate formatted statements — all through a clean interactive CLI powered by `std::print`, `std::format`, and `std::expected`.
 
 <img width="1915" alt="Screenshot 2024-05-16 at 3 30 09 PM" src="https://github.com/shuddha2021/BankEase-Simplify-Your-Finances/assets/81951239/6ed39428-e89c-4c76-893d-adb0b83fd55d">
 
@@ -81,9 +81,11 @@ BankApp (Application Shell)
 ### Key Design Decisions
 
 - **Single responsibility** — `BankAccount` owns financial logic, `BankApp` owns UI and routing, `Transaction` is a value type.
-- **Preflight guard** — Every mutating method calls `preflight()` first, a single point that checks frozen/locked status so no operation can accidentally bypass security.
+- **Preflight guard** — Every mutating method calls `preflight()` first (returns `std::optional<std::string>`), a single point that checks frozen/locked status so no operation can accidentally bypass security.
 - **Interest is a charge** — `applyLoanInterest()` increases the loan balance (debt) without adding money to the account balance.
 - **Transfer validation** — The sender's balance is checked directly (`balance_ < amount`), not through a compound condition.
+- **`std::expected` error handling** — Financial operations return `std::expected<double, std::string>` instead of printing errors and returning `bool`, giving callers structured error information.
+- **Type-safe output** — All output uses `std::print`/`std::println` with `std::format` — no `<<` chaining, no `<iomanip>`, no `<sstream>`.
 - **Password hashing** — Passwords are never stored as plaintext. `std::hash` is used for demonstration; production systems would use bcrypt or argon2.
 
 ---
@@ -92,8 +94,8 @@ BankApp (Application Shell)
 
 ### Prerequisites
 
-- A C++17 compiler: GCC 7+, Clang 5+, or MSVC 2017+
-- CMake 3.16+ (optional — you can compile directly)
+- A C++23 compiler: GCC 13+, Clang 18+, or Apple Clang 21+
+- CMake 3.25+ (optional — you can compile directly)
 
 ### Build with CMake
 
@@ -109,7 +111,7 @@ cmake --build .
 ### Build directly
 
 ```bash
-g++ -std=c++17 -Wall -Wextra -Wpedantic -o bankease main.cpp
+g++ -std=c++23 -Wall -Wextra -Wpedantic -o bankease main.cpp
 ./bankease
 ```
 
@@ -128,7 +130,7 @@ After the demo, both accounts remain available for interactive use:
 ```
 BankEase-Simplify-Your-Finances/
 ├── main.cpp           ← entire application (BankApp, BankAccount, Transaction, util)
-├── CMakeLists.txt     ← CMake build configuration (C++17, strict warnings)
+├── CMakeLists.txt     ← CMake build configuration (C++23, strict warnings)
 ├── .gitignore         ← ignores build artifacts and IDE files
 └── README.md
 ```
@@ -141,9 +143,10 @@ Single-file architecture. No external dependencies. Compiles with `-Wall -Wextra
 
 | Concern | Implementation |
 |:---|:---|
-| **Language** | C++17 |
-| **Build System** | CMake 3.16+ or direct `g++` / `clang++` invocation |
-| **IO & Formatting** | `<iostream>`, `<iomanip>`, `<sstream>` |
+| **Language** | C++23 (`std::print`, `std::format`, `std::expected`, `using enum`, `[[nodiscard]]`) |
+| **Build System** | CMake 3.25+ or direct `g++` / `clang++` invocation |
+| **IO & Formatting** | `<print>` for all output, `<format>` for string formatting — zero `<iomanip>` or `<sstream>` |
+| **Error Handling** | `std::expected<T, std::string>` on financial operations |
 | **Data Structures** | `std::vector<Transaction>` for history, `std::map<string, double>` for multi-currency balances |
 | **Security** | `std::hash` for password hashing (demonstration — not cryptographic) |
 | **Timestamps** | `<ctime>` for transaction timestamps |

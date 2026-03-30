@@ -1,16 +1,18 @@
-#include <iostream>
-#include <string>
-#include <vector>
-#include <iomanip>
-#include <map>
-#include <ctime>
 #include <algorithm>
-#include <sstream>
-#include <functional>
-#include <optional>
-#include <numeric>
-#include <limits>
 #include <cmath>
+#include <ctime>
+#include <expected>
+#include <format>
+#include <functional>
+#include <iostream>
+#include <limits>
+#include <map>
+#include <numeric>
+#include <optional>
+#include <print>
+#include <string>
+#include <utility>
+#include <vector>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility helpers
@@ -24,9 +26,7 @@ std::size_t hashPassword(const std::string& pw) {
 }
 
 std::string formatCurrency(double amount) {
-    std::ostringstream oss;
-    oss << "$" << std::fixed << std::setprecision(2) << amount;
-    return oss.str();
+    return std::format("${:.2f}", amount);
 }
 
 std::string formatDate(std::time_t t) {
@@ -41,14 +41,14 @@ long generateAccountNumber() {
 }
 
 void printLine(int width = 60) {
-    std::cout << std::string(width, '-') << "\n";
+    std::println("{}", std::string(width, '-'));
 }
 
 void printHeader(const std::string& title, int width = 60) {
     printLine(width);
     int pad = (width - static_cast<int>(title.size()) - 2) / 2;
-    std::cout << "|" << std::string(pad, ' ') << title
-              << std::string(width - pad - static_cast<int>(title.size()) - 2, ' ') << "|\n";
+    int rightPad = width - pad - static_cast<int>(title.size()) - 2;
+    std::println("|{}{}{}|", std::string(pad, ' '), title, std::string(rightPad, ' '));
     printLine(width);
 }
 
@@ -60,9 +60,9 @@ void clearInput() {
 double readPositiveDouble(const std::string& prompt) {
     double val = -1;
     while (val <= 0) {
-        std::cout << prompt;
+        std::print("{}", prompt);
         if (!(std::cin >> val) || val <= 0) {
-            std::cout << "  Please enter a positive number.\n";
+            std::println("  Please enter a positive number.");
             clearInput();
             val = -1;
         }
@@ -74,9 +74,9 @@ double readPositiveDouble(const std::string& prompt) {
 int readMenuChoice(int lo, int hi) {
     int choice = -1;
     while (choice < lo || choice > hi) {
-        std::cout << "\n  Choice: ";
+        std::print("\n  Choice: ");
         if (!(std::cin >> choice) || choice < lo || choice > hi) {
-            std::cout << "  Enter a number between " << lo << " and " << hi << ".\n";
+            std::println("  Enter a number between {} and {}.", lo, hi);
             clearInput();
             choice = -1;
         }
@@ -86,7 +86,7 @@ int readMenuChoice(int lo, int hi) {
 }
 
 std::string readLine(const std::string& prompt) {
-    std::cout << prompt;
+    std::print("{}", prompt);
     std::string s;
     std::getline(std::cin, s);
     return s;
@@ -99,23 +99,26 @@ std::string readLine(const std::string& prompt) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct Transaction {
-    enum class Type { Deposit, Withdrawal, Transfer, Received, Loan, LoanRepayment,
-                      InterestCharge, FeeCharge, Reversal, Scheduled };
+    enum class Type : std::uint8_t {
+        Deposit, Withdrawal, Transfer, Received, Loan, LoanRepayment,
+        InterestCharge, FeeCharge, Reversal, Scheduled
+    };
 
-    static std::string typeName(Type t) {
+    static constexpr std::string_view typeName(Type t) {
         switch (t) {
-            case Type::Deposit:        return "Deposit";
-            case Type::Withdrawal:     return "Withdrawal";
-            case Type::Transfer:       return "Transfer Out";
-            case Type::Received:       return "Transfer In";
-            case Type::Loan:           return "Loan Disbursement";
-            case Type::LoanRepayment:  return "Loan Repayment";
-            case Type::InterestCharge: return "Interest Charge";
-            case Type::FeeCharge:      return "Fee";
-            case Type::Reversal:       return "Reversal";
-            case Type::Scheduled:      return "Scheduled";
-            default:                   return "Unknown";
+            using enum Type;
+            case Deposit:        return "Deposit";
+            case Withdrawal:     return "Withdrawal";
+            case Transfer:       return "Transfer Out";
+            case Received:       return "Transfer In";
+            case Loan:           return "Loan Disbursement";
+            case LoanRepayment:  return "Loan Repayment";
+            case InterestCharge: return "Interest Charge";
+            case FeeCharge:      return "Fee";
+            case Reversal:       return "Reversal";
+            case Scheduled:      return "Scheduled";
         }
+        std::unreachable();
     }
 
     Type        type;
@@ -129,19 +132,16 @@ struct Transaction {
     Transaction(Type t, double amt, double bal,
                 std::string cur = "USD", std::string cat = "General", std::string n = "")
         : type(t), amount(amt), balanceAfter(bal), currency(std::move(cur)),
-          category(std::move(cat)), note(std::move(n)) {
-        timestamp = std::time(nullptr);
-    }
+          category(std::move(cat)), timestamp(std::time(nullptr)),
+          note(std::move(n)) {}
 
     void print(int index) const {
-        std::cout << "  [" << std::setw(3) << index << "] "
-                  << std::setw(16) << std::left << typeName(type)
-                  << std::setw(12) << std::right << util::formatCurrency(amount)
-                  << "  -> " << std::setw(12) << util::formatCurrency(balanceAfter)
-                  << "  " << currency
-                  << "  " << util::formatDate(timestamp);
-        if (!note.empty()) std::cout << "  (" << note << ")";
-        std::cout << "\n";
+        std::print("  [{:>3}] {:<16}{:>12}  -> {:>12}  {}  {}",
+                   index, typeName(type),
+                   util::formatCurrency(amount), util::formatCurrency(balanceAfter),
+                   currency, util::formatDate(timestamp));
+        if (!note.empty()) std::print("  ({})", note);
+        std::println("");
     }
 };
 
@@ -175,160 +175,157 @@ public:
     }
 
     // ── Authentication ──────────────────────────────────────────────────────
-    bool authenticate(const std::string& user, const std::string& pass) const {
+    [[nodiscard]] bool authenticate(const std::string& user, const std::string& pass) const {
         return username_ == user && passwordHash_ == util::hashPassword(pass);
     }
 
     bool changePassword(const std::string& oldPass, const std::string& newPass) {
         if (util::hashPassword(oldPass) != passwordHash_) {
-            std::cout << "  Incorrect current password.\n";
+            std::println("  Incorrect current password.");
             return false;
         }
         if (newPass.size() < 6) {
-            std::cout << "  Password must be at least 6 characters.\n";
+            std::println("  Password must be at least 6 characters.");
             return false;
         }
         passwordHash_ = util::hashPassword(newPass);
-        std::cout << "  Password changed successfully.\n";
+        std::println("  Password changed successfully.");
         return true;
     }
 
     // ── Deposit ─────────────────────────────────────────────────────────────
-    bool deposit(double amount, const std::string& currency = "USD") {
-        if (!preflight("Deposit")) return false;
-        if (amount <= 0) { std::cout << "  Amount must be positive.\n"; return false; }
+    auto deposit(double amount, const std::string& currency = "USD")
+        -> std::expected<double, std::string>
+    {
+        if (auto err = preflight("Deposit")) return std::unexpected(*err);
+        if (amount <= 0) return std::unexpected(std::string("Amount must be positive."));
 
         balance_ += amount;
         currencies_[currency] += amount;
         log(Transaction::Type::Deposit, amount, currency);
         notify("Deposit", amount, currency);
-        return true;
+        return balance_;
     }
 
     // ── Withdraw ────────────────────────────────────────────────────────────
-    bool withdraw(double amount, const std::string& currency = "USD") {
-        if (!preflight("Withdrawal")) return false;
-        if (amount <= 0) { std::cout << "  Amount must be positive.\n"; return false; }
+    auto withdraw(double amount, const std::string& currency = "USD")
+        -> std::expected<double, std::string>
+    {
+        if (auto err = preflight("Withdrawal")) return std::unexpected(*err);
+        if (amount <= 0) return std::unexpected(std::string("Amount must be positive."));
 
         double total = amount + withdrawFee_;
-        if (balance_ + overdraftLimit_ < total) {
-            std::cout << "  Insufficient funds (incl. " << util::formatCurrency(withdrawFee_) << " fee).\n";
-            return false;
-        }
-        if (dailySpent_ + total > dailyLimit_) {
-            std::cout << "  Would exceed daily transaction limit of " << util::formatCurrency(dailyLimit_) << ".\n";
-            return false;
-        }
+        if (balance_ + overdraftLimit_ < total)
+            return std::unexpected(std::format("Insufficient funds (incl. {} fee).",
+                                               util::formatCurrency(withdrawFee_)));
+        if (dailySpent_ + total > dailyLimit_)
+            return std::unexpected(std::format("Would exceed daily transaction limit of {}.",
+                                               util::formatCurrency(dailyLimit_)));
 
         balance_ -= total;
         currencies_[currency] -= total;
         dailySpent_ += total;
-        log(Transaction::Type::Withdrawal, amount, currency, "General", "incl. " + util::formatCurrency(withdrawFee_) + " fee");
+        log(Transaction::Type::Withdrawal, amount, currency, "General",
+            std::format("incl. {} fee", util::formatCurrency(withdrawFee_)));
         if (withdrawFee_ > 0)
             log(Transaction::Type::FeeCharge, withdrawFee_, currency, "Fee");
         notify("Withdrawal", amount, currency);
-        return true;
+        return balance_;
     }
 
     // ── Transfer ────────────────────────────────────────────────────────────
-    bool transferTo(BankAccount& recipient, double amount) {
-        if (!preflight("Transfer")) return false;
-        if (recipient.frozen_ || recipient.locked_) {
-            std::cout << "  Recipient account is frozen or locked.\n";
-            return false;
-        }
-        if (amount <= 0) { std::cout << "  Amount must be positive.\n"; return false; }
-        if (balance_ < amount) {
-            std::cout << "  Insufficient balance for transfer.\n";
-            return false;
-        }
-        if (dailySpent_ + amount > dailyLimit_) {
-            std::cout << "  Would exceed your daily limit of " << util::formatCurrency(dailyLimit_) << ".\n";
-            return false;
-        }
+    auto transferTo(BankAccount& recipient, double amount)
+        -> std::expected<double, std::string>
+    {
+        if (auto err = preflight("Transfer")) return std::unexpected(*err);
+        if (recipient.frozen_ || recipient.locked_)
+            return std::unexpected(std::string("Recipient account is frozen or locked."));
+        if (amount <= 0) return std::unexpected(std::string("Amount must be positive."));
+        if (balance_ < amount)
+            return std::unexpected(std::string("Insufficient balance for transfer."));
+        if (dailySpent_ + amount > dailyLimit_)
+            return std::unexpected(std::format("Would exceed your daily limit of {}.",
+                                               util::formatCurrency(dailyLimit_)));
 
         balance_ -= amount;
         currencies_["USD"] -= amount;
         dailySpent_ += amount;
-        log(Transaction::Type::Transfer, amount, "USD", "Transfer", "to #" + std::to_string(recipient.accountNumber_));
+        log(Transaction::Type::Transfer, amount, "USD", "Transfer",
+            std::format("to #{}", recipient.accountNumber_));
 
         recipient.balance_ += amount;
         recipient.currencies_["USD"] += amount;
         recipient.history_.emplace_back(Transaction::Type::Received, amount, recipient.balance_,
-                                        "USD", "Transfer", "from #" + std::to_string(accountNumber_));
+                                        "USD", "Transfer",
+                                        std::format("from #{}", accountNumber_));
 
-        std::cout << "  Transferred " << util::formatCurrency(amount)
-                  << " to " << recipient.holder_ << " (#" << recipient.accountNumber_ << ").\n";
+        std::println("  Transferred {} to {} (#{}).",
+                     util::formatCurrency(amount), recipient.holder_, recipient.accountNumber_);
         notify("Transfer", amount, "USD");
-        return true;
+        return balance_;
     }
 
     // ── Loan ────────────────────────────────────────────────────────────────
-    bool requestLoan(double amount, double rate) {
-        if (amount <= 0 || rate < 0) {
-            std::cout << "  Invalid loan amount or rate.\n";
-            return false;
-        }
-        if (loanBalance_ > 0) {
-            std::cout << "  You already have an outstanding loan of " << util::formatCurrency(loanBalance_) << ".\n";
-            return false;
-        }
+    auto requestLoan(double amount, double rate)
+        -> std::expected<double, std::string>
+    {
+        if (amount <= 0 || rate < 0)
+            return std::unexpected(std::string("Invalid loan amount or rate."));
+        if (loanBalance_ > 0)
+            return std::unexpected(std::format("You already have an outstanding loan of {}.",
+                                               util::formatCurrency(loanBalance_)));
         loanBalance_ = amount;
         loanRate_ = rate;
         balance_ += amount;
         currencies_["USD"] += amount;
         log(Transaction::Type::Loan, amount, "USD", "Loan");
-        std::cout << "  Loan of " << util::formatCurrency(amount)
-                  << " approved at " << rate << "% interest.\n";
-        return true;
+        std::println("  Loan of {} approved at {}% interest.",
+                     util::formatCurrency(amount), rate);
+        return balance_;
     }
 
     void applyLoanInterest() {
         if (loanBalance_ <= 0) {
-            std::cout << "  No outstanding loan.\n";
+            std::println("  No outstanding loan.");
             return;
         }
         double interest = loanBalance_ * (loanRate_ / 100.0);
         loanBalance_ += interest;
         // Interest is a charge — it increases debt, does NOT add to balance
         log(Transaction::Type::InterestCharge, interest, "USD", "Loan",
-            "loan balance now " + util::formatCurrency(loanBalance_));
-        std::cout << "  Interest of " << util::formatCurrency(interest)
-                  << " applied. Outstanding loan: " << util::formatCurrency(loanBalance_) << "\n";
+            std::format("loan balance now {}", util::formatCurrency(loanBalance_)));
+        std::println("  Interest of {} applied. Outstanding loan: {}",
+                     util::formatCurrency(interest), util::formatCurrency(loanBalance_));
     }
 
-    bool repayLoan(double amount) {
-        if (!preflight("Loan Repayment")) return false;
-        if (amount <= 0) { std::cout << "  Amount must be positive.\n"; return false; }
-        if (loanBalance_ <= 0) { std::cout << "  No outstanding loan.\n"; return false; }
+    auto repayLoan(double amount)
+        -> std::expected<double, std::string>
+    {
+        if (auto err = preflight("Loan Repayment")) return std::unexpected(*err);
+        if (amount <= 0) return std::unexpected(std::string("Amount must be positive."));
+        if (loanBalance_ <= 0) return std::unexpected(std::string("No outstanding loan."));
         amount = std::min(amount, loanBalance_); // Can't overpay
-        if (balance_ < amount) {
-            std::cout << "  Insufficient balance to repay.\n";
-            return false;
-        }
+        if (balance_ < amount)
+            return std::unexpected(std::string("Insufficient balance to repay."));
         balance_ -= amount;
         currencies_["USD"] -= amount;
         loanBalance_ -= amount;
         log(Transaction::Type::LoanRepayment, amount, "USD", "Loan",
-            "remaining: " + util::formatCurrency(loanBalance_));
-        std::cout << "  Repaid " << util::formatCurrency(amount)
-                  << ". Remaining loan: " << util::formatCurrency(loanBalance_) << "\n";
-        return true;
+            std::format("remaining: {}", util::formatCurrency(loanBalance_)));
+        std::println("  Repaid {}. Remaining loan: {}",
+                     util::formatCurrency(amount), util::formatCurrency(loanBalance_));
+        return balance_;
     }
 
     // ── Transaction history ─────────────────────────────────────────────────
     void printHistory() const {
         util::printHeader("Transaction History");
         if (history_.empty()) {
-            std::cout << "  No transactions yet.\n";
+            std::println("  No transactions yet.");
             util::printLine();
             return;
         }
-        std::cout << "  " << std::setw(5) << std::left << "Idx"
-                  << std::setw(16) << "Type"
-                  << std::setw(12) << std::right << "Amount"
-                  << "  -> " << std::setw(12) << "Balance"
-                  << "  Cur   Date\n";
+        std::println("  {:<5}{:<16}{:>12}  -> {:>12}  Cur   Date", "Idx", "Type", "Amount", "Balance");
         util::printLine();
         for (int i = 0; i < static_cast<int>(history_.size()); ++i)
             history_[i].print(i);
@@ -337,48 +334,48 @@ public:
 
     void categorizeTransaction(int idx, const std::string& cat) {
         if (idx < 0 || idx >= static_cast<int>(history_.size())) {
-            std::cout << "  Invalid index.\n";
+            std::println("  Invalid index.");
             return;
         }
         history_[idx].category = cat;
-        std::cout << "  Transaction [" << idx << "] categorized as \"" << cat << "\".\n";
+        std::println("  Transaction [{}] categorized as \"{}\".", idx, cat);
     }
 
-    bool reverseTransaction(int idx) {
-        if (idx < 0 || idx >= static_cast<int>(history_.size())) {
-            std::cout << "  Invalid index.\n";
-            return false;
-        }
+    auto reverseTransaction(int idx)
+        -> std::expected<double, std::string>
+    {
+        if (idx < 0 || idx >= static_cast<int>(history_.size()))
+            return std::unexpected(std::string("Invalid index."));
+
         auto& tx = history_[idx];
         if (tx.type == Transaction::Type::Deposit) {
             balance_ -= tx.amount;
         } else if (tx.type == Transaction::Type::Withdrawal) {
             balance_ += tx.amount;
         } else {
-            std::cout << "  Only deposits and withdrawals can be reversed.\n";
-            return false;
+            return std::unexpected(std::string("Only deposits and withdrawals can be reversed."));
         }
         double reversed = tx.amount;
         history_.erase(history_.begin() + idx);
         log(Transaction::Type::Reversal, reversed, "USD", "Reversal");
-        std::cout << "  Transaction reversed. Balance: " << util::formatCurrency(balance_) << "\n";
-        return true;
+        std::println("  Transaction reversed. Balance: {}", util::formatCurrency(balance_));
+        return balance_;
     }
 
     // ── Account controls ────────────────────────────────────────────────────
-    void freeze()   { frozen_ = true;  std::cout << "  Account frozen.\n"; }
-    void unfreeze() { frozen_ = false; std::cout << "  Account unfrozen.\n"; }
-    void lock()     { locked_ = true;  std::cout << "  Account locked.\n"; }
-    void unlock()   { locked_ = false; std::cout << "  Account unlocked.\n"; }
+    void freeze()   { frozen_ = true;  std::println("  Account frozen."); }
+    void unfreeze() { frozen_ = false; std::println("  Account unfrozen."); }
+    void lock()     { locked_ = true;  std::println("  Account locked."); }
+    void unlock()   { locked_ = false; std::println("  Account unlocked."); }
 
     void setDailyLimit(double limit) {
         dailyLimit_ = limit;
-        std::cout << "  Daily limit set to " << util::formatCurrency(limit) << "\n";
+        std::println("  Daily limit set to {}", util::formatCurrency(limit));
     }
 
     void setAlias(const std::string& a) {
         alias_ = a;
-        std::cout << "  Alias set to \"" << alias_ << "\"\n";
+        std::println("  Alias set to \"{}\"", alias_);
     }
 
     void resetDailySpent() { dailySpent_ = 0; }
@@ -386,49 +383,48 @@ public:
     // ── Reporting ───────────────────────────────────────────────────────────
     void printStatement() const {
         util::printHeader("Account Statement");
-        std::cout << "  Account Holder : " << holder_ << "\n"
-                  << "  Alias          : " << alias_ << "\n"
-                  << "  Account Number : " << accountNumber_ << "\n"
-                  << "  Balance        : " << util::formatCurrency(balance_) << "\n"
-                  << "  Overdraft Limit: " << util::formatCurrency(overdraftLimit_) << "\n"
-                  << "  Interest Rate  : " << interestRate_ << "%\n"
-                  << "  Daily Limit    : " << util::formatCurrency(dailyLimit_) << "\n"
-                  << "  Daily Spent    : " << util::formatCurrency(dailySpent_) << "\n"
-                  << "  Withdraw Fee   : " << util::formatCurrency(withdrawFee_) << "\n"
-                  << "  Status         : " << (frozen_ ? "FROZEN" : locked_ ? "LOCKED" : "Active") << "\n";
+        std::println("  Account Holder : {}", holder_);
+        std::println("  Alias          : {}", alias_);
+        std::println("  Account Number : {}", accountNumber_);
+        std::println("  Balance        : {}", util::formatCurrency(balance_));
+        std::println("  Overdraft Limit: {}", util::formatCurrency(overdraftLimit_));
+        std::println("  Interest Rate  : {}%", interestRate_);
+        std::println("  Daily Limit    : {}", util::formatCurrency(dailyLimit_));
+        std::println("  Daily Spent    : {}", util::formatCurrency(dailySpent_));
+        std::println("  Withdraw Fee   : {}", util::formatCurrency(withdrawFee_));
+        std::println("  Status         : {}", frozen_ ? "FROZEN" : locked_ ? "LOCKED" : "Active");
         if (loanBalance_ > 0)
-            std::cout << "  Loan Balance   : " << util::formatCurrency(loanBalance_)
-                      << " @ " << loanRate_ << "%\n";
+            std::println("  Loan Balance   : {} @ {}%",
+                         util::formatCurrency(loanBalance_), loanRate_);
         util::printLine();
-        std::cout << "  Currency Balances:\n";
+        std::println("  Currency Balances:");
         for (const auto& [cur, amt] : currencies_)
-            std::cout << "    " << cur << ": " << util::formatCurrency(amt) << "\n";
+            std::println("    {}: {}", cur, util::formatCurrency(amt));
         util::printLine();
-        std::cout << "  Transactions: " << history_.size() << "\n";
+        std::println("  Transactions: {}", history_.size());
         util::printLine();
     }
 
     void printSummary() const {
-        std::cout << "  " << std::setw(12) << accountNumber_
-                  << "  " << std::setw(20) << std::left << holder_
-                  << std::setw(14) << std::right << util::formatCurrency(balance_)
-                  << "  " << (frozen_ ? "FROZEN" : locked_ ? "LOCKED" : "Active") << "\n";
+        std::println("  {:>12}  {:<20}{:>14}  {}",
+                     accountNumber_, holder_, util::formatCurrency(balance_),
+                     frozen_ ? "FROZEN" : locked_ ? "LOCKED" : "Active");
     }
 
     // ── Accessors ───────────────────────────────────────────────────────────
-    long          number()   const { return accountNumber_; }
-    const std::string& holder()   const { return holder_; }
-    double        balance()  const { return balance_; }
-    double        loanBal()  const { return loanBalance_; }
-    bool          isFrozen() const { return frozen_; }
-    bool          isLocked() const { return locked_; }
+    [[nodiscard]] long               number()   const { return accountNumber_; }
+    [[nodiscard]] const std::string& holder()   const { return holder_; }
+    [[nodiscard]] double             balance()  const { return balance_; }
+    [[nodiscard]] double             loanBal()  const { return loanBalance_; }
+    [[nodiscard]] bool               isFrozen() const { return frozen_; }
+    [[nodiscard]] bool               isLocked() const { return locked_; }
 
 private:
-    // ── Preflight check ─────────────────────────────────────────────────────
-    bool preflight(const std::string& action) const {
-        if (frozen_) { std::cout << "  Account is frozen. " << action << " denied.\n"; return false; }
-        if (locked_) { std::cout << "  Account is locked. " << action << " denied.\n"; return false; }
-        return true;
+    // ── Preflight check — returns error string if blocked ───────────────────
+    [[nodiscard]] std::optional<std::string> preflight(const std::string& action) const {
+        if (frozen_) return std::format("Account is frozen. {} denied.", action);
+        if (locked_) return std::format("Account is locked. {} denied.", action);
+        return std::nullopt;
     }
 
     void log(Transaction::Type t, double amount, const std::string& cur,
@@ -437,8 +433,8 @@ private:
     }
 
     void notify(const std::string& type, double amount, const std::string& cur) const {
-        std::cout << "  [Notification] " << type << " of " << util::formatCurrency(amount)
-                  << " " << cur << " processed. Balance: " << util::formatCurrency(balance_) << "\n";
+        std::println("  [Notification] {} of {} {} processed. Balance: {}",
+                     type, util::formatCurrency(amount), cur, util::formatCurrency(balance_));
     }
 
     std::string holder_;
@@ -475,26 +471,31 @@ public:
 
 private:
     std::vector<BankAccount> accounts_;
-    int activeIdx_ = -1; // index of currently logged-in account
+    int activeIdx_ = -1;
+
+    // ── Helper: print error from std::expected ──────────────────────────────
+    static void showError(const std::string& err) {
+        std::println("  {}", err);
+    }
 
     // ── Banner ──────────────────────────────────────────────────────────────
     void printBanner() const {
-        std::cout << "\n";
+        std::println("");
         util::printHeader("BankEase — Simplify Your Finances");
-        std::cout << "  A professional C++ banking application\n"
-                  << "  Type a menu number and press Enter\n";
+        std::println("  A professional C++23 banking application");
+        std::println("  Type a menu number and press Enter");
         util::printLine();
     }
 
     // ── Main menu ───────────────────────────────────────────────────────────
     void mainMenu() {
         while (true) {
-            std::cout << "\n  === Main Menu ===\n"
-                      << "  [1] Create Account\n"
-                      << "  [2] Log In\n"
-                      << "  [3] List All Accounts\n"
-                      << "  [4] Run Demo\n"
-                      << "  [0] Exit\n";
+            std::println("\n  === Main Menu ===");
+            std::println("  [1] Create Account");
+            std::println("  [2] Log In");
+            std::println("  [3] List All Accounts");
+            std::println("  [4] Run Demo");
+            std::println("  [0] Exit");
             int c = util::readMenuChoice(0, 4);
             switch (c) {
                 case 1: createAccount(); break;
@@ -502,7 +503,7 @@ private:
                 case 3: listAccounts(); break;
                 case 4: runDemo(); break;
                 case 0:
-                    std::cout << "\n  Thank you for using BankEase. Goodbye!\n\n";
+                    std::println("\n  Thank you for using BankEase. Goodbye!\n");
                     return;
             }
         }
@@ -511,64 +512,64 @@ private:
     // ── Create account ──────────────────────────────────────────────────────
     void createAccount() {
         util::printHeader("Create New Account");
-        std::string name = util::readLine("  Full name: ");
-        std::string user = util::readLine("  Username: ");
-        std::string pass = util::readLine("  Password (min 6 chars): ");
+        auto name = util::readLine("  Full name: ");
+        auto user = util::readLine("  Username: ");
+        auto pass = util::readLine("  Password (min 6 chars): ");
         if (pass.size() < 6) {
-            std::cout << "  Password too short. Minimum 6 characters.\n";
+            std::println("  Password too short. Minimum 6 characters.");
             return;
         }
         double initial = util::readPositiveDouble("  Initial deposit ($): ");
 
         accounts_.emplace_back(name, initial, user, pass, 2.5, 500.0, 10000.0, 2.50);
-        auto& acct = accounts_.back();
-        std::cout << "\n  Account created successfully!\n"
-                  << "  Account Number: " << acct.number() << "\n"
-                  << "  Balance: " << util::formatCurrency(acct.balance()) << "\n";
+        const auto& acct = accounts_.back();
+        std::println("\n  Account created successfully!");
+        std::println("  Account Number: {}", acct.number());
+        std::println("  Balance: {}", util::formatCurrency(acct.balance()));
     }
 
     // ── Login ───────────────────────────────────────────────────────────────
     void login() {
         util::printHeader("Log In");
-        std::string user = util::readLine("  Username: ");
-        std::string pass = util::readLine("  Password: ");
+        auto user = util::readLine("  Username: ");
+        auto pass = util::readLine("  Password: ");
 
         for (int i = 0; i < static_cast<int>(accounts_.size()); ++i) {
             if (accounts_[i].authenticate(user, pass)) {
                 activeIdx_ = i;
-                std::cout << "\n  Welcome back, " << accounts_[i].holder() << "!\n";
+                std::println("\n  Welcome back, {}!", accounts_[i].holder());
                 accountMenu();
                 activeIdx_ = -1;
                 return;
             }
         }
-        std::cout << "  Invalid credentials.\n";
+        std::println("  Invalid credentials.");
     }
 
     // ── Account menu ────────────────────────────────────────────────────────
     void accountMenu() {
         auto& acct = accounts_[activeIdx_];
         while (true) {
-            std::cout << "\n  === Account Menu (" << acct.holder() << " #" << acct.number() << ") ===\n"
-                      << "  Balance: " << util::formatCurrency(acct.balance()) << "\n\n"
-                      << "  [1]  Deposit\n"
-                      << "  [2]  Withdraw\n"
-                      << "  [3]  Transfer\n"
-                      << "  [4]  Check Balance\n"
-                      << "  [5]  Transaction History\n"
-                      << "  [6]  Account Statement\n"
-                      << "  [7]  Loan Menu\n"
-                      << "  [8]  Account Settings\n"
-                      << "  [9]  Categorize Transaction\n"
-                      << "  [10] Reverse Transaction\n"
-                      << "  [0]  Log Out\n";
+            std::println("\n  === Account Menu ({} #{}) ===", acct.holder(), acct.number());
+            std::println("  Balance: {}\n", util::formatCurrency(acct.balance()));
+            std::println("  [1]  Deposit");
+            std::println("  [2]  Withdraw");
+            std::println("  [3]  Transfer");
+            std::println("  [4]  Check Balance");
+            std::println("  [5]  Transaction History");
+            std::println("  [6]  Account Statement");
+            std::println("  [7]  Loan Menu");
+            std::println("  [8]  Account Settings");
+            std::println("  [9]  Categorize Transaction");
+            std::println("  [10] Reverse Transaction");
+            std::println("  [0]  Log Out");
             int c = util::readMenuChoice(0, 10);
             switch (c) {
                 case 1: menuDeposit(acct); break;
                 case 2: menuWithdraw(acct); break;
                 case 3: menuTransfer(acct); break;
                 case 4:
-                    std::cout << "  Balance: " << util::formatCurrency(acct.balance()) << "\n";
+                    std::println("  Balance: {}", util::formatCurrency(acct.balance()));
                     break;
                 case 5: acct.printHistory(); break;
                 case 6: acct.printStatement(); break;
@@ -577,7 +578,7 @@ private:
                 case 9: menuCategorize(acct); break;
                 case 10: menuReverse(acct); break;
                 case 0:
-                    std::cout << "  Logged out.\n";
+                    std::println("  Logged out.");
                     return;
             }
         }
@@ -586,61 +587,65 @@ private:
     // ── Deposit ─────────────────────────────────────────────────────────────
     void menuDeposit(BankAccount& acct) {
         double amt = util::readPositiveDouble("  Deposit amount ($): ");
-        std::string cur = util::readLine("  Currency (default USD): ");
+        auto cur = util::readLine("  Currency (default USD): ");
         if (cur.empty()) cur = "USD";
-        acct.deposit(amt, cur);
+        if (auto r = acct.deposit(amt, cur); !r)
+            showError(r.error());
     }
 
     // ── Withdraw ────────────────────────────────────────────────────────────
     void menuWithdraw(BankAccount& acct) {
         double amt = util::readPositiveDouble("  Withdrawal amount ($): ");
-        acct.withdraw(amt);
+        if (auto r = acct.withdraw(amt); !r)
+            showError(r.error());
     }
 
     // ── Transfer ────────────────────────────────────────────────────────────
     void menuTransfer(BankAccount& acct) {
         if (accounts_.size() < 2) {
-            std::cout << "  No other accounts to transfer to.\n";
+            std::println("  No other accounts to transfer to.");
             return;
         }
         util::printHeader("Available Recipients");
         for (int i = 0; i < static_cast<int>(accounts_.size()); ++i) {
             if (i == activeIdx_) continue;
-            std::cout << "  [" << i << "] " << accounts_[i].holder()
-                      << " (#" << accounts_[i].number() << ")\n";
+            std::println("  [{}] {} (#{})", i, accounts_[i].holder(), accounts_[i].number());
         }
-        std::cout << "  Recipient index: ";
+        std::print("  Recipient index: ");
         int idx;
         std::cin >> idx;
         util::clearInput();
         if (idx < 0 || idx >= static_cast<int>(accounts_.size()) || idx == activeIdx_) {
-            std::cout << "  Invalid recipient.\n";
+            std::println("  Invalid recipient.");
             return;
         }
         double amt = util::readPositiveDouble("  Transfer amount ($): ");
-        acct.transferTo(accounts_[idx], amt);
+        if (auto r = acct.transferTo(accounts_[idx], amt); !r)
+            showError(r.error());
     }
 
     // ── Loan menu ───────────────────────────────────────────────────────────
     void loanMenu(BankAccount& acct) {
         while (true) {
-            std::cout << "\n  === Loan Menu ===\n"
-                      << "  Outstanding: " << util::formatCurrency(acct.loanBal()) << "\n\n"
-                      << "  [1] Request Loan\n"
-                      << "  [2] Repay Loan\n"
-                      << "  [3] Apply Interest\n"
-                      << "  [0] Back\n";
+            std::println("\n  === Loan Menu ===");
+            std::println("  Outstanding: {}\n", util::formatCurrency(acct.loanBal()));
+            std::println("  [1] Request Loan");
+            std::println("  [2] Repay Loan");
+            std::println("  [3] Apply Interest");
+            std::println("  [0] Back");
             int c = util::readMenuChoice(0, 3);
             switch (c) {
                 case 1: {
                     double amt = util::readPositiveDouble("  Loan amount ($): ");
                     double rate = util::readPositiveDouble("  Interest rate (%): ");
-                    acct.requestLoan(amt, rate);
+                    if (auto r = acct.requestLoan(amt, rate); !r)
+                        showError(r.error());
                     break;
                 }
                 case 2: {
                     double amt = util::readPositiveDouble("  Repayment amount ($): ");
-                    acct.repayLoan(amt);
+                    if (auto r = acct.repayLoan(amt); !r)
+                        showError(r.error());
                     break;
                 }
                 case 3: acct.applyLoanInterest(); break;
@@ -652,21 +657,21 @@ private:
     // ── Settings menu ───────────────────────────────────────────────────────
     void settingsMenu(BankAccount& acct) {
         while (true) {
-            std::cout << "\n  === Account Settings ===\n"
-                      << "  [1] Set Alias\n"
-                      << "  [2] Change Password\n"
-                      << "  [3] Set Daily Limit\n"
-                      << "  [4] Freeze Account\n"
-                      << "  [5] Unfreeze Account\n"
-                      << "  [6] Lock Account\n"
-                      << "  [7] Unlock Account\n"
-                      << "  [0] Back\n";
+            std::println("\n  === Account Settings ===");
+            std::println("  [1] Set Alias");
+            std::println("  [2] Change Password");
+            std::println("  [3] Set Daily Limit");
+            std::println("  [4] Freeze Account");
+            std::println("  [5] Unfreeze Account");
+            std::println("  [6] Lock Account");
+            std::println("  [7] Unlock Account");
+            std::println("  [0] Back");
             int c = util::readMenuChoice(0, 7);
             switch (c) {
                 case 1: acct.setAlias(util::readLine("  New alias: ")); break;
                 case 2: {
-                    std::string old = util::readLine("  Current password: ");
-                    std::string np  = util::readLine("  New password: ");
+                    auto old = util::readLine("  Current password: ");
+                    auto np  = util::readLine("  New password: ");
                     acct.changePassword(old, np);
                     break;
                 }
@@ -683,34 +688,32 @@ private:
     // ── Categorize ──────────────────────────────────────────────────────────
     void menuCategorize(BankAccount& acct) {
         acct.printHistory();
-        std::cout << "  Transaction index: ";
+        std::print("  Transaction index: ");
         int idx;
         std::cin >> idx;
         util::clearInput();
-        std::string cat = util::readLine("  Category: ");
+        auto cat = util::readLine("  Category: ");
         acct.categorizeTransaction(idx, cat);
     }
 
     // ── Reverse ─────────────────────────────────────────────────────────────
     void menuReverse(BankAccount& acct) {
         acct.printHistory();
-        std::cout << "  Transaction index to reverse: ";
+        std::print("  Transaction index to reverse: ");
         int idx;
         std::cin >> idx;
         util::clearInput();
-        acct.reverseTransaction(idx);
+        if (auto r = acct.reverseTransaction(idx); !r)
+            showError(r.error());
     }
 
     // ── List accounts ───────────────────────────────────────────────────────
     void listAccounts() const {
         util::printHeader("All Accounts");
         if (accounts_.empty()) {
-            std::cout << "  No accounts yet.\n";
+            std::println("  No accounts yet.");
         } else {
-            std::cout << "  " << std::setw(12) << std::left << "Account #"
-                      << "  " << std::setw(20) << "Holder"
-                      << std::setw(14) << std::right << "Balance"
-                      << "  Status\n";
+            std::println("  {:<12}  {:<20}{:>14}  Status", "Account #", "Holder", "Balance");
             util::printLine();
             for (const auto& a : accounts_) a.printSummary();
         }
@@ -720,58 +723,58 @@ private:
     // ── Demo mode ───────────────────────────────────────────────────────────
     void runDemo() {
         util::printHeader("Running Demo");
-        std::cout << "\n  Creating two demo accounts...\n\n";
+        std::println("\n  Creating two demo accounts...\n");
 
         accounts_.emplace_back("Alice Johnson",  5000.0, "alice", "pass123", 2.5, 500.0, 10000.0, 2.50);
         accounts_.emplace_back("Bob Smith",      2000.0, "bob",   "pass456", 2.5, 300.0, 10000.0, 2.50);
         auto& alice = accounts_[accounts_.size() - 2];
         auto& bob   = accounts_[accounts_.size() - 1];
 
-        std::cout << "  Alice (#" << alice.number() << ") — " << util::formatCurrency(alice.balance()) << "\n";
-        std::cout << "  Bob   (#" << bob.number()   << ") — " << util::formatCurrency(bob.balance()) << "\n\n";
+        std::println("  Alice (#{}) — {}", alice.number(), util::formatCurrency(alice.balance()));
+        std::println("  Bob   (#{}) — {}\n", bob.number(), util::formatCurrency(bob.balance()));
 
         // Deposit
-        std::cout << "  --- Alice deposits $1,500 ---\n";
+        std::println("  --- Alice deposits $1,500 ---");
         alice.deposit(1500.0);
 
         // Withdraw
-        std::cout << "\n  --- Alice withdraws $300 ---\n";
+        std::println("\n  --- Alice withdraws $300 ---");
         alice.withdraw(300.0);
 
         // Transfer
-        std::cout << "\n  --- Alice transfers $1,000 to Bob ---\n";
+        std::println("\n  --- Alice transfers $1,000 to Bob ---");
         alice.transferTo(bob, 1000.0);
 
         // Loan
-        std::cout << "\n  --- Bob requests $5,000 loan at 4.5% ---\n";
+        std::println("\n  --- Bob requests $5,000 loan at 4.5% ---");
         bob.requestLoan(5000.0, 4.5);
 
         // Interest
-        std::cout << "\n  --- Apply interest on Bob's loan ---\n";
+        std::println("\n  --- Apply interest on Bob's loan ---");
         bob.applyLoanInterest();
 
         // Repay
-        std::cout << "\n  --- Bob repays $2,000 ---\n";
+        std::println("\n  --- Bob repays $2,000 ---");
         bob.repayLoan(2000.0);
 
         // Freeze & unfreeze
-        std::cout << "\n  --- Freeze Alice's account, attempt deposit, then unfreeze ---\n";
+        std::println("\n  --- Freeze Alice's account, attempt deposit, then unfreeze ---");
         alice.freeze();
         alice.deposit(100.0); // Should fail
         alice.unfreeze();
         alice.deposit(100.0); // Should succeed
 
         // Statements
-        std::cout << "\n";
+        std::println("");
         alice.printStatement();
         alice.printHistory();
 
-        std::cout << "\n";
+        std::println("");
         bob.printStatement();
         bob.printHistory();
 
-        std::cout << "\n  Demo complete. Accounts are available for interactive use.\n"
-                  << "  Login as alice/pass123 or bob/pass456.\n";
+        std::println("\n  Demo complete. Accounts are available for interactive use.");
+        std::println("  Login as alice/pass123 or bob/pass456.");
     }
 };
 
